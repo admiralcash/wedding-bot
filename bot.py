@@ -2,11 +2,11 @@ from telegram import Bot, Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import logging
 
-# Токен бота (замени на свой)
+# Токен бота и ID организатора
 TOKEN = "8118288915:AAFetk_yAXr517sDSuG6NZ2yFi96q-ETvoU"
-ORGANIZER_ID = "Y318677172"  # Куда будут приходить ответы гостей
+ORGANIZER_ID = "318677172"
 
-# File IDs фотографий (замени на свои)
+# File IDs фотографий
 PHOTO_IDS = [
     "AAMCAgADGQEBxq37Z5ud5B6CXi7slU3qf_Mzj1lvcnsAAghuAAJUTuBIigTVuYm2AzABAAdtAAM2BA", 
     "AAMCAgADGQEBxq5TZ5ue3HZk18lBvi-f8PbtMKFRwzYAAiluAAJUTuBIegOfV6nETpoBAAdtAAM2BA", 
@@ -21,7 +21,7 @@ PHOTO_IDS = [
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext):
+def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     context.bot.send_message(chat_id, "Привет! Добро пожаловать на нашу свадьбу! 🎉")
     
@@ -33,63 +33,49 @@ def start(update: Update, context: CallbackContext):
     for photo in PHOTO_IDS[3:]:
         context.bot.send_photo(chat_id, photo)
     
-    # Запуск опроса
     ask_attendance(update, context)
 
-def ask_attendance(update: Update, context: CallbackContext):
+def ask_attendance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("Да", callback_data='attending_yes'),
                  InlineKeyboardButton("Нет", callback_data='attending_no')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text("Ты придёшь на свадьбу?", reply_markup=reply_markup)
 
-def button(update: Update, context: CallbackContext):
+def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     query.answer()
     response = query.data
-    
-    # Отправка организатору
     context.bot.send_message(ORGANIZER_ID, f"Ответ от {query.message.chat.first_name}: {response}")
     
-    steps = {
-        'attending_yes': ("Будешь с +1?", ['plus_one_yes', 'plus_one_no']),
-        'plus_one_yes': ("Остаёшься с ночёвкой?", ['stay_yes', 'stay_no']),
-        'plus_one_no': ("Остаёшься с ночёвкой?", ['stay_yes', 'stay_no']),
-        'stay_yes': ("Тебе нужен трансфер?", ['transfer_both', 'transfer_to', 'transfer_from', 'transfer_no']),
-        'stay_no': ("Тебе нужен трансфер?", ['transfer_both', 'transfer_to', 'transfer_from', 'transfer_no']),
-        'transfer_both': ("Какое меню выберешь?", ['menu_meat', 'menu_fish']),
-        'transfer_to': ("Какое меню выберешь?", ['menu_meat', 'menu_fish']),
-        'transfer_from': ("Какое меню выберешь?", ['menu_meat', 'menu_fish']),
-        'transfer_no': ("Какое меню выберешь?", ['menu_meat', 'menu_fish']),
-        'menu_meat': ("Выбери напитки (можно несколько):", ['drink_champagne', 'drink_redwine', 'drink_whitewine', 'drink_martini', 'drink_strong', 'drink_nonalc']),
-        'menu_fish': ("Выбери напитки (можно несколько):", ['drink_champagne', 'drink_redwine', 'drink_whitewine', 'drink_martini', 'drink_strong', 'drink_nonalc'])
+    next_questions = {
+        'attending_yes': "Будешь с +1?",
+        'plus_one_yes': "Остаёшься с ночёвкой?",
+        'stay_yes': "Тебе нужен трансфер?",
+        'transfer_both': "Какое меню выберешь?",
+        'menu_meat': "Выбери напитки (можно несколько):",
+        'menu_fish': "Выбери напитки (можно несколько):"
     }
     
-    if response in steps:
-        text, options = steps[response]
-        buttons = [[InlineKeyboardButton(option.replace('_', ' '), callback_data=option)] for option in options]
-        query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    if response in next_questions:
+        query.edit_message_text(next_questions[response], reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("Да", callback_data=response + '_yes'), InlineKeyboardButton("Нет", callback_data=response + '_no')]
+        ]))
     else:
         query.edit_message_text("Спасибо за участие! Если допустили ошибку, нажмите /start и пройдите опрос заново. Ссылка на свадебный чат: [Перейти](https://t.me/+YnMBjkthhZ1mN2Qy)", parse_mode='Markdown')
 
-def notify_guests(update: Update, context: CallbackContext):
+def notify_guests(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) == ORGANIZER_ID:
         message = update.message.text.replace("/notify ", "")
-        for guest in context.bot_data.get("guests", []):
-            context.bot.send_message(guest, f"📢 Важное сообщение от организатора:\n{message}")
         update.message.reply_text("Сообщение отправлено всем гостям.")
     else:
         update.message.reply_text("Эта команда только для организатора.")
 
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-    
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CallbackQueryHandler(button))
-    dp.add_handler(CommandHandler("notify", notify_guests))
-    
-    updater.start_polling()
-    updater.idle()
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CommandHandler("notify", notify_guests))
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
