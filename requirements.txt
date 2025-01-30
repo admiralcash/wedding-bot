@@ -1,2 +1,1 @@
-Flask
-pyTelegramBotAPI
+python-telegram-bot
