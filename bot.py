@@ -104,6 +104,8 @@ def broadcast_message(message):
 
 @app.route('/' + TOKEN, methods=['POST'])
 def getMessage():
+    data = request.get_json()
+    print(f"📩 Получены данные от Telegram: {data}")  # Логируем входящие данные
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
     return "", 200
 
